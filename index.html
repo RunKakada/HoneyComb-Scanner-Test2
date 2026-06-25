@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>AI Honeycomb Inspector | YOLOv8 Web AR</title>
+    <link rel="stylesheet" href="css/style.css" />
+    <link rel="manifest" href="manifest.json" />
+    <meta name="theme-color" content="#f5f7fb" />
+</head>
+<body>
+<main class="ar-app">
+<section class="ar-stage">
+
+    <video id="cameraVideo" autoplay playsinline muted></video>
+    <canvas id="processCanvas"></canvas>
+    <canvas id="arCanvas"></canvas>
+
+    <!-- TOP BAR -->
+    <div id="topHud" class="top-bar">
+        <div class="top-bar-title">
+            <h1>AI Honeycomb Inspector</h1>
+            <p>YOLOv8 Web AR · Concrete Surface Scan</p>
+        </div>
+        <div id="modelBadge" class="model-badge">MODEL LOADING</div>
+    </div>
+
+    <!-- LIVE STRIP -->
+    <div class="live-strip">
+        <div class="strip-pill">
+            <div class="dot" id="statusDot"></div>
+            <span class="label">Voids</span>
+            <span class="value" id="voidCount">0</span>
+        </div>
+        <div class="strip-pill" style="flex:1; justify-content:center; gap:10px;">
+            <span class="label" id="scanStatusStrip">READY</span>
+        </div>
+        <div class="strip-pill" id="statsBtn" style="cursor:pointer; pointer-events:all;">
+            <span style="font-size:18px">📋</span>
+        </div>
+    </div>
+
+    <!-- FROZEN BADGE -->
+    <div id="frozenBadge" class="frozen-badge hidden">⏸ FROZEN</div>
+
+    <!-- CONTROL BAR -->
+    <div class="control-bar">
+        <button id="startBtn" class="btn-primary">
+            <span class="btn-icon">📷</span>
+            <span class="btn-label">Start</span>
+        </button>
+        <button id="freezeBtn">
+            <span class="btn-icon">⏸</span>
+            <span class="btn-label">Freeze</span>
+        </button>
+        <button id="overlayBtn">
+            <span class="btn-icon">🧿</span>
+            <span class="btn-label">Overlay</span>
+        </button>
+        <button id="captureBtn">
+            <span class="btn-icon">🖼️</span>
+            <span class="btn-label">Capture</span>
+        </button>
+        <button id="reportBtn" class="btn-accent">
+            <span class="btn-icon">📄</span>
+            <span class="btn-label">Report</span>
+        </button>
+        <button id="resetBtn">
+            <span class="btn-icon">🔄</span>
+            <span class="btn-label">Reset</span>
+        </button>
+    </div>
+
+    <!-- SCAN STATUS SHEET (📋 button) -->
+    <div class="bottom-sheet-backdrop" id="sheetBackdrop"></div>
+    <div class="bottom-sheet" id="bottomSheet">
+        <div class="sheet-handle"></div>
+        <div class="sheet-header">
+            <h2>Scan Status</h2>
+            <button class="sheet-close" id="sheetClose">✕</button>
+        </div>
+        <div class="sheet-section">
+            <div class="sheet-section-title">Live Detection</div>
+            <div class="stat-grid">
+                <div class="stat-card">
+                    <div class="stat-label">Status</div>
+                    <div class="stat-value cyan" id="scanStatus">READY</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">AI Model</div>
+                    <div class="stat-value green" id="modelStatus">Loading…</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">FPS</div>
+                    <div class="stat-value" id="fpsValue">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Elapsed</div>
+                    <div class="stat-value" id="elapsedTime">00:00</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Voids Found</div>
+                    <div class="stat-value cyan" id="sheetVoidCount">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Concrete ROI</div>
+                    <div class="stat-value green" id="surfaceStatus">Active</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="sheet-section">
+            <div class="sheet-section-title">Captures</div>
+            <div id="captureThumbsRow" class="thumbs-row">
+                <span class="no-captures">No captures yet. Press 🖼️ Capture during scan.</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- REPORT MODAL -->
+    <div class="modal-backdrop hidden" id="reportBackdrop"></div>
+    <div class="modal hidden" id="reportModal">
+        <div class="modal-header">
+            <h2>Inspection Report</h2>
+            <button class="sheet-close" id="reportClose">✕</button>
+        </div>
+
+        <div class="modal-body">
+            <!-- Project Info Form -->
+            <div class="form-section">
+                <div class="form-section-title">Project Information</div>
+                <div class="form-group">
+                    <label for="f_project">Project Name</label>
+                    <input type="text" id="f_project" placeholder="e.g. Bridge Deck Inspection 2026" />
+                </div>
+                <div class="form-group">
+                    <label for="f_subject">Subject</label>
+                    <input type="text" id="f_subject" placeholder="e.g. Honeycomb Defect Assessment" />
+                </div>
+                <div class="form-group">
+                    <label for="f_structural_type">Structural Type</label>
+                    <select id="f_structural_type">
+                        <option value="">— Select —</option>
+                        <option>Beam</option>
+                        <option>Column</option>
+                        <option>Slab</option>
+                        <option>Wall</option>
+                        <option>Foundation</option>
+                        <option>Bridge Deck</option>
+                        <option>Pile</option>
+                        <option>Other</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="f_structural_name">Structural Name / ID</label>
+                    <input type="text" id="f_structural_name" placeholder="e.g. B-14, COL-3A" />
+                </div>
+                <div class="form-group">
+                    <label for="f_date">Date of Inspection</label>
+                    <input type="date" id="f_date" />
+                </div>
+                <div class="form-group">
+                    <label for="f_inspector">Inspector Name</label>
+                    <input type="text" id="f_inspector" placeholder="e.g. Eng. Sopheak Kem" />
+                </div>
+            </div>
+
+            <!-- Captures Preview -->
+            <div class="form-section" id="captureSection">
+                <div class="form-section-title">Captured Photos (<span id="captureCount">0</span>)</div>
+                <div id="reportThumbs" class="thumbs-row report-photo-grid"></div>
+                <p class="no-captures" id="noCaptureNote" style="display:none">
+                    No captures yet — go back and press 🖼️ Capture during your scan.
+                </p>
+            </div>
+
+            <!-- General Honeycomb Repair Method Statement -->
+            <div class="form-section method-preview-section">
+                <div class="form-section-title">General Method Statement for Honeycomb Repair</div>
+                <div class="method-card">
+                    <p><strong>1. Inspection & Marking:</strong> Identify and mark all honeycomb locations, estimate affected area, and confirm whether the defect is superficial or structurally significant.</p>
+                    <p><strong>2. Surface Preparation:</strong> Remove loose concrete, laitance, dust, oil, and weak material until sound concrete is reached.</p>
+                    <p><strong>3. Cleaning:</strong> Clean the repair area using brush, compressed air, or water jet. The surface should be clean and slightly damp before repair mortar application.</p>
+                    <p><strong>4. Bonding Treatment:</strong> Apply approved bonding agent or cement slurry where required by the repair material manufacturer.</p>
+                    <p><strong>5. Repair Application:</strong> Fill the defect with non-shrink repair mortar or approved polymer-modified repair mortar in layers and compact properly.</p>
+                    <p><strong>6. Finishing & Curing:</strong> Finish the surface to match adjacent concrete and cure the repaired area according to the material specification.</p>
+                    <p><strong>Note:</strong> For deep honeycomb, exposed reinforcement, or large structural defects, consult the structural engineer before repair.</p>
+                </div>
+            </div>
+
+
+        </div>
+
+        <div class="modal-footer">
+            <button id="exportPngBtn" class="btn-export">
+                <span>🖼️</span> Export PNG
+            </button>
+            <button id="exportPdfBtn" class="btn-export btn-export-pdf">
+                <span>📄</span> Export PDF
+            </button>
+        </div>
+    </div>
+
+</section>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="js/camera.js"></script>
+<script src="js/concrete-surface.js"></script>
+<script src="js/measurement.js"></script>
+<script src="js/yolo-detector.js"></script>
+<script src="js/ar-overlay.js"></script>
+<script src="js/hud.js"></script>
+<script src="js/export.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
